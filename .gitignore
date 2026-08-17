@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Environment files
+.env
+backend/.env
+frontend/.env
+
+# Logs
+backend/logs/*.log
+
+# Uploads (user files)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Data files (large files)
+backend/data/raw/*.csv
+backend/data/processed/*.csv
+backend/data/evaluation/sample_resumes/*
+
+# Models cache
+backend/models/
+
+# Node
+node_modules/
+frontend/build/
+
+# VS Code
+.vscode/settings.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
