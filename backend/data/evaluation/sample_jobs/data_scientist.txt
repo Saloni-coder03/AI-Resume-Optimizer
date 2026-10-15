@@ -1,0 +1,4 @@
+Hiring Data Scientist with 3+ years experience.
+Skills: Machine Learning, Deep Learning, TensorFlow, Python, SQL, Pandas, NumPy.
+Responsibilities: Build ML models, analyze data, create dashboards.
+Education: M.Tech or Masters preferred.
