@@ -1,0 +1,4 @@
+Looking for Frontend Developer with 1+ years experience.
+Skills: React, JavaScript, TypeScript, HTML, CSS, Tailwind CSS, Redux.
+Responsibilities: Build responsive UI, work with APIs, optimize performance.
+Education: B.Tech or equivalent.

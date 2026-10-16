@@ -1,0 +1,28 @@
+{
+  "test_cases": [
+    {
+      "name": "Tech Resume vs Python Job",
+      "resume_file": "sample_resumes/software_eng.pdf",
+      "job_file": "sample_jobs/python_developer.txt",
+      "expected_min": 50,
+      "expected_max": 95,
+      "reason": "Tech resume should match tech job well"
+    },
+    {
+      "name": "Fresher vs Python Job",
+      "resume_file": "sample_resumes/fresher.pdf",
+      "job_file": "sample_jobs/python_developer.txt",
+      "expected_min": 20,
+      "expected_max": 70,
+      "reason": "Fresher may have skills but less experience"
+    },
+    {
+      "name": "Tech Resume vs Marketing Job",
+      "resume_file": "sample_resumes/software_eng.pdf",
+      "job_file": "sample_jobs/marketing_manager.txt",
+      "expected_min": 5,
+      "expected_max": 35,
+      "reason": "Tech resume should NOT match marketing job"
+    }
+  ]
+}
