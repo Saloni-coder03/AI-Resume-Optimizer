@@ -40,3 +40,15 @@ Thumbs.db
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
+# Frontend environment files
+frontend/.env.development
+frontend/.env.production
+frontend/.env.local
+frontend/.env.*.local
+
+# Generated security audit reports
+frontend/audit-report.json
+
+# Local testing files
+sample_resume.docx
+sample_resume.txt
