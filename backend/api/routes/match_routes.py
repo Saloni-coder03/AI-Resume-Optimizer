@@ -1,6 +1,5 @@
 
 from pathlib import Path
-import shutil
 import uuid
 
 from fastapi import (
@@ -21,7 +20,16 @@ from ai.recommendations import (
 )
 
 from database.db_queries import save_analysis
+
+# Person 1's centralized configuration and logging
+from core.config import settings
 from core.logger import api_logger
+from core.exceptions import (
+    ResumeOptimizerException,
+    ResumeParserError,
+    InvalidFileTypeError,
+    FileTooLargeError,
+)
 
 
 router = APIRouter(
@@ -31,15 +39,14 @@ router = APIRouter(
 
 
 # --------------------------------------------------
-# TEMPORARY UPLOAD DIRECTORY
+# UPLOAD CONFIGURATION
 # --------------------------------------------------
 
-UPLOAD_DIRECTORY = Path(__file__).resolve().parents[2] / "uploads"
+UPLOAD_DIRECTORY = settings.UPLOAD_PATH
 
-UPLOAD_DIRECTORY.mkdir(
-    parents=True,
-    exist_ok=True,
-)
+MAX_FILE_SIZE = settings.MAX_FILE_SIZE_BYTES
+
+ALLOWED_EXTENSIONS = settings.ALLOWED_EXTENSIONS_LIST
 
 
 # --------------------------------------------------
@@ -67,18 +74,16 @@ async def match_resume(
 
     extension = Path(file.filename).suffix.lower()
 
-    allowed_extensions = [
-        ".pdf",
-        ".docx",
-    ]
+    # The current frontend supports PDF and DOCX.
+    allowed_upload_types = (".pdf", ".docx")
 
-    if extension not in allowed_extensions:
+    if (
+        extension not in allowed_upload_types
+        or extension not in ALLOWED_EXTENSIONS
+    ):
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Only PDF and DOCX files "
-                "are supported."
-            ),
+            detail="Only PDF and DOCX files are supported.",
         )
 
     # --------------------------------------------------
@@ -92,24 +97,48 @@ async def match_resume(
         )
 
     # --------------------------------------------------
-    # CREATE TEMPORARY FILE
+    # CREATE UNIQUE TEMPORARY FILE
     # --------------------------------------------------
 
-    temporary_filename = f"{uuid.uuid4()}{extension}"
+    temporary_filename = f"{uuid.uuid4().hex}{extension}"
 
     file_path = UPLOAD_DIRECTORY / temporary_filename
 
     try:
 
         # --------------------------------------------------
-        # STEP 1: SAVE RESUME TEMPORARILY
+        # STEP 1: SAVE UPLOAD WITH SIZE LIMIT
         # --------------------------------------------------
 
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(
-                file.file,
-                buffer,
+        total_size = 0
+
+        with file_path.open("wb") as buffer:
+
+            while chunk := await file.read(1024 * 1024):
+
+                total_size += len(chunk)
+
+                if total_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=(
+                            f"Resume exceeds the maximum "
+                            f"file size of "
+                            f"{settings.MAX_FILE_SIZE_MB} MB."
+                        ),
+                    )
+
+                buffer.write(chunk)
+
+        if total_size == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="The uploaded resume is empty.",
             )
+
+        api_logger.info(
+            "Resume uploaded for analysis"
+        )
 
         # --------------------------------------------------
         # STEP 2: EXTRACT RESUME TEXT
@@ -121,16 +150,15 @@ async def match_resume(
 
         if not resume_text.strip():
             raise HTTPException(
-                status_code=400,
+                status_code=422,
                 detail=(
-                    "No readable text was found "
-                    "in the resume. Please try "
-                    "another PDF or DOCX file."
+                    "No readable text was found in the "
+                    "resume. Please upload another file."
                 ),
             )
 
         # --------------------------------------------------
-        # STEP 3: COMPARE RESUME WITH JOB
+        # STEP 3: AI RESUME MATCHING
         # --------------------------------------------------
 
         match_result = compare_resume_to_job(
@@ -139,6 +167,7 @@ async def match_resume(
         )
 
         matched_skills = match_result["matched_skills"]
+
         missing_skills = match_result["missing_skills"]
 
         # --------------------------------------------------
@@ -159,7 +188,7 @@ async def match_resume(
         )
 
         # --------------------------------------------------
-        # STEP 6: CREATE JOB LABEL FOR HISTORY
+        # STEP 6: PREPARE DASHBOARD LABEL
         # --------------------------------------------------
 
         job_label = next(
@@ -171,11 +200,10 @@ async def match_resume(
             "Job Description",
         )
 
-        # Keep dashboard label short
         job_label = job_label[:120]
 
         # --------------------------------------------------
-        # STEP 7: SAVE ANALYSIS TO DATABASE
+        # STEP 7: SAVE ANALYSIS
         # --------------------------------------------------
 
         save_analysis(
@@ -186,8 +214,12 @@ async def match_resume(
             missing_skills=missing_skills,
         )
 
+        api_logger.info(
+            "Resume analysis completed successfully"
+        )
+
         # --------------------------------------------------
-        # STEP 8: RETURN RESULTS TO REACT
+        # STEP 8: RETURN RESULTS TO FRONTEND
         # --------------------------------------------------
 
         return MatchResponse(
@@ -201,19 +233,51 @@ async def match_resume(
         )
 
     # --------------------------------------------------
-    # HANDLE VALIDATION ERRORS
+    # FASTAPI VALIDATION ERRORS
     # --------------------------------------------------
 
     except HTTPException:
         raise
 
     # --------------------------------------------------
-    # HANDLE UNEXPECTED ERRORS WITH CENTRAL LOGGING
+    # PERSON 1'S AI EXCEPTIONS
     # --------------------------------------------------
 
-    except Exception:
+    except (
+        InvalidFileTypeError,
+        FileTooLargeError,
+        ResumeParserError,
+    ) as error:
+
+        api_logger.warning(
+            "Resume validation or parsing failed: %s",
+            type(error).__name__,
+        )
+
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=error.message,
+        ) from error
+
+    except ResumeOptimizerException as error:
+
         api_logger.exception(
-            "Resume analysis failed"
+            "AI processing failed"
+        )
+
+        raise HTTPException(
+            status_code=error.status_code,
+            detail="Unable to process the resume at this time.",
+        ) from error
+
+    # --------------------------------------------------
+    # UNEXPECTED SERVER ERRORS
+    # --------------------------------------------------
+
+    except Exception as error:
+
+        api_logger.exception(
+            "Unexpected resume analysis error"
         )
 
         raise HTTPException(
@@ -222,19 +286,21 @@ async def match_resume(
                 "Unable to analyze the resume. "
                 "Please try again."
             ),
-        ) from None
+        ) from error
 
     # --------------------------------------------------
-    # ALWAYS DELETE TEMPORARY RESUME
+    # CLEAN UP TEMPORARY FILES
     # --------------------------------------------------
 
     finally:
+
         try:
             if file_path.exists():
                 file_path.unlink()
+
         except OSError:
             api_logger.exception(
-                "Failed to delete temporary resume file"
+                "Failed to delete temporary resume"
             )
 
         await file.close()
