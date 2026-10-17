@@ -1,36 +1,47 @@
+
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { analyzeResume } from "../api/apiService";
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_EXTENSIONS = ["pdf", "docx"];
 
 function UploadPage() {
   const [resume, setResume] = useState(null);
   const [jobDescription, setJobDescription] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const navigate = useNavigate();
 
+  // --------------------------------------------------
+  // FILE VALIDATION
+  // --------------------------------------------------
 
-  // Handle resume selection
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-
-    if (!file) {
-      return;
-    }
+  const validateAndSetFile = (file) => {
+    if (!file || loading) return;
 
     const extension = file.name
       .split(".")
       .pop()
       .toLowerCase();
 
-    if (!["pdf", "docx"].includes(extension)) {
-      setError(
-        "Please upload only a PDF or DOCX file."
-      );
+    if (!ALLOWED_EXTENSIONS.includes(extension)) {
+      setError("Please upload only a PDF or DOCX file.");
+      setResume(null);
+      return;
+    }
 
+    if (file.size === 0) {
+      setError("The selected file is empty.");
+      setResume(null);
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setError("Resume must be 5 MB or smaller.");
       setResume(null);
       return;
     }
@@ -39,24 +50,86 @@ function UploadPage() {
     setError("");
   };
 
+  // --------------------------------------------------
+  // HANDLE FILE SELECTION
+  // --------------------------------------------------
 
-  // Analyze resume
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0];
+
+    validateAndSetFile(file);
+
+    // Allow the same file to be selected again.
+    event.target.value = "";
+  };
+
+  // --------------------------------------------------
+  // DRAG AND DROP
+  // --------------------------------------------------
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!loading) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setIsDragging(false);
+
+    if (loading) return;
+
+    const files = event.dataTransfer.files;
+
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    if (files.length > 1) {
+      setError("Please upload only one resume at a time.");
+      setResume(null);
+      return;
+    }
+
+    validateAndSetFile(files[0]);
+  };
+
+  // --------------------------------------------------
+  // ANALYZE RESUME
+  // --------------------------------------------------
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!resume) {
-      setError(
-        "Please upload your resume."
-      );
+    if (loading) return;
 
+    if (!resume) {
+      setError("Please upload your resume.");
       return;
     }
 
     if (!jobDescription.trim()) {
-      setError(
-        "Please enter a job description."
-      );
+      setError("Please enter a job description.");
+      return;
+    }
 
+    // Final check before sending to backend.
+    if (resume.size > MAX_FILE_SIZE) {
+      setError("Resume must be 5 MB or smaller.");
       return;
     }
 
@@ -64,48 +137,33 @@ function UploadPage() {
       setLoading(true);
       setError("");
 
-      // Send resume + job description to FastAPI
+      // Send resume and job description to FastAPI.
       const result = await analyzeResume(
         resume,
         jobDescription
       );
 
-      console.log(
-        "Analysis result:",
-        result
-      );
-
-      // Send result to Results page
-      navigate(
-        "/results",
-        {
-          state: {
-            result: result,
-            filename: resume.name,
-          },
-        }
-      );
-
+      // Navigate to results with analysis data.
+      navigate("/results", {
+        state: {
+          result: result,
+          filename: resume.name,
+        },
+      });
     } catch (err) {
-      console.error(
-        "Analysis error:",
-        err
-      );
+      console.error("Analysis error:", err);
 
       let message =
         "Something went wrong while analyzing your resume.";
 
-      const detail =
-        err.response?.data?.detail;
+      const detail = err.response?.data?.detail;
 
       if (typeof detail === "string") {
         message = detail;
       }
 
       if (Array.isArray(detail)) {
-        message =
-          detail[0]?.msg ||
-          message;
+        message = detail[0]?.msg || message;
       }
 
       if (!err.response) {
@@ -114,43 +172,33 @@ function UploadPage() {
       }
 
       setError(message);
-
     } finally {
       setLoading(false);
     }
   };
 
+  // --------------------------------------------------
+  // RENDER
+  // --------------------------------------------------
 
   return (
     <div style={styles.page}>
-
       {/* Navbar */}
 
       <nav style={styles.navbar}>
-
-        <Link
-          to="/"
-          style={styles.logo}
-        >
+        <Link to="/" style={styles.logo}>
           AI Resume Optimizer
         </Link>
 
-        <Link
-          to="/"
-          style={styles.homeLink}
-        >
+        <Link to="/" style={styles.homeLink}>
           Home
         </Link>
-
       </nav>
 
-
       <main style={styles.container}>
-
         {/* Header */}
 
         <div style={styles.header}>
-
           <div style={styles.badge}>
             AI-Powered Resume Analysis
           </div>
@@ -163,88 +211,82 @@ function UploadPage() {
             Upload your resume and paste the job description
             to discover how well your profile matches the role.
           </p>
-
         </div>
 
-
-        <form
-          onSubmit={handleSubmit}
-          style={styles.form}
-        >
-
+        <form onSubmit={handleSubmit} style={styles.form}>
           {/* Resume Upload */}
 
           <section style={styles.card}>
-
             <div style={styles.sectionHeader}>
-
-              <div style={styles.stepNumber}>
-                1
-              </div>
+              <div style={styles.stepNumber}>1</div>
 
               <div>
-
                 <h2 style={styles.sectionTitle}>
                   Upload Your Resume
                 </h2>
 
                 <p style={styles.sectionText}>
-                  Select a PDF or DOCX resume from your computer.
+                  Select or drag and drop a PDF or DOCX resume
+                  from your computer.
                 </p>
-
               </div>
-
             </div>
 
+            {/* Drag-and-drop upload area */}
 
-            <label style={styles.uploadBox}>
-
-              <div style={styles.uploadIcon}>
-                📄
-              </div>
+            <div
+              style={{
+                ...styles.uploadBox,
+                ...(isDragging ? styles.draggingBox : {}),
+                ...(loading ? styles.uploadDisabled : {}),
+              }}
+              onDragEnter={handleDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <div style={styles.uploadIcon}>📄</div>
 
               <h3 style={styles.uploadTitle}>
-                Upload Resume
+                {isDragging
+                  ? "Drop Your Resume Here"
+                  : "Upload Resume"}
               </h3>
 
               <p style={styles.uploadText}>
-                Click below to choose your file
+                Drag and drop your resume here, or browse files.
               </p>
 
-
-              <input
-                type="file"
-                accept=".pdf,.docx"
-                onChange={handleFileChange}
-                disabled={loading}
-                style={styles.hiddenInput}
-              />
-
-
-              <span style={styles.browseButton}>
+              <label style={styles.browseButton}>
                 Browse File
-              </span>
 
+                <input
+                  type="file"
+                  accept=".pdf,.docx"
+                  onChange={handleFileChange}
+                  disabled={loading}
+                  style={styles.hiddenInput}
+                />
+              </label>
 
               <p style={styles.helperText}>
                 Supported formats: PDF and DOCX
               </p>
 
-            </label>
+              <p style={styles.helperText}>
+                Maximum file size: 5 MB
+              </p>
+            </div>
 
-
-            {/* Selected file */}
+            {/* Selected File */}
 
             {resume && (
-
               <div style={styles.selectedFile}>
-
                 <div style={styles.successIcon}>
                   ✓
                 </div>
 
-                <div>
-
+                <div style={styles.selectedFileDetails}>
                   <div style={styles.fileName}>
                     {resume.name}
                   </div>
@@ -252,28 +294,31 @@ function UploadPage() {
                   <div style={styles.fileInfo}>
                     {(resume.size / 1024).toFixed(1)} KB
                   </div>
-
                 </div>
 
+                <button
+                  type="button"
+                  style={styles.removeButton}
+                  disabled={loading}
+                  onClick={() => {
+                    setResume(null);
+                    setError("");
+                  }}
+                  aria-label="Remove selected resume"
+                >
+                  Remove
+                </button>
               </div>
-
             )}
-
           </section>
-
 
           {/* Job Description */}
 
           <section style={styles.card}>
-
             <div style={styles.sectionHeader}>
-
-              <div style={styles.stepNumber}>
-                2
-              </div>
+              <div style={styles.stepNumber}>2</div>
 
               <div>
-
                 <h2 style={styles.sectionTitle}>
                   Paste Job Description
                 </h2>
@@ -282,18 +327,13 @@ function UploadPage() {
                   Paste the complete job description you are
                   applying for.
                 </p>
-
               </div>
-
             </div>
-
 
             <textarea
               value={jobDescription}
               onChange={(event) =>
-                setJobDescription(
-                  event.target.value
-                )
+                setJobDescription(event.target.value)
               }
               placeholder={`Paste the job description here...
 
@@ -310,32 +350,19 @@ Responsibilities:
               style={styles.textarea}
             />
 
-
             <div style={styles.characterCount}>
               {jobDescription.length} characters
             </div>
-
           </section>
-
 
           {/* Error Message */}
 
           {error && (
-
-            <div style={styles.errorBox}>
-
-              <span>
-                ⚠️
-              </span>
-
-              <span>
-                {error}
-              </span>
-
+            <div style={styles.errorBox} role="alert">
+              <span>⚠️</span>
+              <span>{error}</span>
             </div>
-
           )}
-
 
           {/* Analyze Button */}
 
@@ -344,58 +371,43 @@ Responsibilities:
             disabled={loading}
             style={{
               ...styles.analyzeButton,
-
-              ...(loading
-                ? styles.disabledButton
-                : {}),
+              ...(loading ? styles.disabledButton : {}),
             }}
           >
-
             {loading
               ? "Analyzing Resume..."
               : "Analyze Resume →"}
-
           </button>
-
 
           {/* Loading Message */}
 
           {loading && (
-
             <div style={styles.loadingBox}>
-
-              <div style={styles.loader}>
-                ⏳
-              </div>
+              <div style={styles.loader}>⏳</div>
 
               <div>
-
                 <strong>
                   Analyzing your resume...
                 </strong>
 
                 <p style={styles.loadingText}>
-                  Extracting skills and comparing them
-                  with the job description.
+                  Extracting skills and comparing them with
+                  the job description.
                 </p>
-
               </div>
-
             </div>
-
           )}
-
         </form>
-
       </main>
-
     </div>
   );
 }
 
+// --------------------------------------------------
+// STYLES
+// --------------------------------------------------
 
 const styles = {
-
   page: {
     minHeight: "100vh",
     backgroundColor: "#f8fafc",
@@ -403,17 +415,17 @@ const styles = {
     color: "#1e293b",
   },
 
-
   navbar: {
-    height: "70px",
-    padding: "0 8%",
+    minHeight: "70px",
+    padding: "12px 8%",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: "16px",
+    flexWrap: "wrap",
     backgroundColor: "white",
     borderBottom: "1px solid #e2e8f0",
   },
-
 
   logo: {
     color: "#2563eb",
@@ -422,13 +434,11 @@ const styles = {
     textDecoration: "none",
   },
 
-
   homeLink: {
     color: "#475569",
     textDecoration: "none",
     fontWeight: "bold",
   },
-
 
   container: {
     maxWidth: "850px",
@@ -436,12 +446,10 @@ const styles = {
     padding: "55px 20px 80px",
   },
 
-
   header: {
     textAlign: "center",
     marginBottom: "40px",
   },
-
 
   badge: {
     display: "inline-block",
@@ -454,12 +462,10 @@ const styles = {
     marginBottom: "15px",
   },
 
-
   heading: {
-    fontSize: "42px",
+    fontSize: "clamp(28px, 5vw, 42px)",
     margin: "10px 0",
   },
-
 
   subtitle: {
     color: "#64748b",
@@ -469,22 +475,18 @@ const styles = {
     margin: "0 auto",
   },
 
-
   form: {
     display: "flex",
     flexDirection: "column",
     gap: "25px",
   },
 
-
   card: {
     backgroundColor: "white",
-    padding: "30px",
+    padding: "clamp(18px, 4vw, 30px)",
     borderRadius: "16px",
-    boxShadow:
-      "0 4px 18px rgba(0,0,0,0.06)",
+    boxShadow: "0 4px 18px rgba(0,0,0,0.06)",
   },
-
 
   sectionHeader: {
     display: "flex",
@@ -492,7 +494,6 @@ const styles = {
     gap: "15px",
     marginBottom: "25px",
   },
-
 
   stepNumber: {
     minWidth: "38px",
@@ -506,12 +507,10 @@ const styles = {
     fontWeight: "bold",
   },
 
-
   sectionTitle: {
     margin: 0,
     fontSize: "21px",
   },
-
 
   sectionText: {
     margin: "6px 0 0",
@@ -520,7 +519,6 @@ const styles = {
     lineHeight: "1.5",
   },
 
-
   uploadBox: {
     display: "block",
     textAlign: "center",
@@ -528,30 +526,36 @@ const styles = {
     backgroundColor: "#f8fbff",
     borderRadius: "14px",
     padding: "40px 20px",
-    cursor: "pointer",
+    transition: "all 0.2s ease",
   },
 
+  draggingBox: {
+    borderColor: "#2563eb",
+    backgroundColor: "#dbeafe",
+    boxShadow: "0 0 0 4px rgba(37,99,235,0.1)",
+  },
+
+  uploadDisabled: {
+    opacity: 0.65,
+    cursor: "not-allowed",
+  },
 
   uploadIcon: {
     fontSize: "48px",
   },
 
-
   uploadTitle: {
     margin: "12px 0 5px",
   },
-
 
   uploadText: {
     color: "#64748b",
     marginBottom: "20px",
   },
 
-
   hiddenInput: {
     display: "none",
   },
-
 
   browseButton: {
     display: "inline-block",
@@ -560,15 +564,14 @@ const styles = {
     padding: "11px 22px",
     borderRadius: "8px",
     fontWeight: "bold",
+    cursor: "pointer",
   },
-
 
   helperText: {
     color: "#94a3b8",
     fontSize: "12px",
-    marginTop: "16px",
+    marginTop: "12px",
   },
-
 
   selectedFile: {
     marginTop: "18px",
@@ -579,8 +582,8 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "12px",
+    flexWrap: "wrap",
   },
-
 
   successIcon: {
     width: "35px",
@@ -594,12 +597,16 @@ const styles = {
     fontWeight: "bold",
   },
 
+  selectedFileDetails: {
+    flex: "1 1 160px",
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
 
   fileName: {
     fontWeight: "bold",
     color: "#166534",
   },
-
 
   fileInfo: {
     color: "#64748b",
@@ -607,6 +614,14 @@ const styles = {
     marginTop: "3px",
   },
 
+  removeButton: {
+    backgroundColor: "white",
+    border: "1px solid #fecaca",
+    color: "#dc2626",
+    borderRadius: "8px",
+    padding: "8px 12px",
+    cursor: "pointer",
+  },
 
   textarea: {
     width: "100%",
@@ -622,14 +637,12 @@ const styles = {
     outlineColor: "#2563eb",
   },
 
-
   characterCount: {
     textAlign: "right",
     color: "#94a3b8",
     fontSize: "12px",
     marginTop: "8px",
   },
-
 
   errorBox: {
     display: "flex",
@@ -640,7 +653,6 @@ const styles = {
     padding: "14px",
     borderRadius: "9px",
   },
-
 
   analyzeButton: {
     width: "100%",
@@ -654,12 +666,10 @@ const styles = {
     cursor: "pointer",
   },
 
-
   disabledButton: {
     backgroundColor: "#93c5fd",
     cursor: "not-allowed",
   },
-
 
   loadingBox: {
     backgroundColor: "#eff6ff",
@@ -671,19 +681,15 @@ const styles = {
     alignItems: "center",
   },
 
-
   loader: {
     fontSize: "28px",
   },
-
 
   loadingText: {
     color: "#64748b",
     margin: "5px 0 0",
     fontSize: "14px",
   },
-
 };
-
 
 export default UploadPage;
