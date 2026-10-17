@@ -10,3 +10,5 @@ pdfminer.six
 docx2txt
 pydantic-settings
 python-dotenv
+sqlalchemy
+psycopg[binary]

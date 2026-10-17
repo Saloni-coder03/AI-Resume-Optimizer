@@ -7,6 +7,9 @@ from core.logger import db_logger
 from core.exceptions import DatabaseOperationError
 from database.db_models import Resume, MatchResult
 
+from sqlalchemy import select, func, delete
+from database.db_setup import SessionLocal
+from database.db_models import Analysis
 
 def save_resume(
     db: Session,
@@ -130,3 +133,157 @@ def get_best_score(db: Session, resume_id: str = None) -> float:
     except Exception as e:
         db_logger.error(f"Failed to get best score: {e}")
         return 0.0
+
+# --------------------------------------------------
+# DASHBOARD COMPATIBILITY FUNCTIONS
+# --------------------------------------------------
+
+def save_analysis(
+    filename: str,
+    job_label: str,
+    match_score: float,
+    matched_skills: list[str],
+    missing_skills: list[str],
+) -> int:
+
+    with SessionLocal() as db:
+        try:
+            analysis = Analysis(
+                filename=filename,
+                job_label=job_label,
+                match_score=match_score,
+                matched_skills=matched_skills,
+                missing_skills=missing_skills,
+            )
+
+            db.add(analysis)
+            db.commit()
+            db.refresh(analysis)
+
+            db_logger.info(
+                "Analysis saved successfully: %s",
+                analysis.id,
+            )
+
+            return analysis.id
+
+        except Exception as error:
+            db.rollback()
+            db_logger.exception(
+                "Failed to save dashboard analysis"
+            )
+            raise DatabaseOperationError(
+                "Failed to save analysis"
+            ) from error
+
+
+def get_history(limit: int = 20) -> list[dict]:
+
+    with SessionLocal() as db:
+        try:
+            results = db.scalars(
+                select(Analysis)
+                .order_by(
+                    Analysis.created_at.desc(),
+                    Analysis.id.desc(),
+                )
+                .limit(limit)
+            ).all()
+
+            return [
+                {
+                    "id": item.id,
+                    "filename": item.filename,
+                    "job_label": item.job_label,
+                    "match_score": item.match_score,
+                    "matched_skills": item.matched_skills,
+                    "missing_skills": item.missing_skills,
+                    "created_at": item.created_at.isoformat(),
+                }
+                for item in results
+            ]
+
+        except Exception as error:
+            db_logger.exception(
+                "Failed to retrieve dashboard history"
+            )
+            raise DatabaseOperationError(
+                "Failed to retrieve history"
+            ) from error
+
+
+def get_stats() -> dict:
+
+    with SessionLocal() as db:
+        try:
+            total, average, best = db.execute(
+                select(
+                    func.count(Analysis.id),
+                    func.avg(Analysis.match_score),
+                    func.max(Analysis.match_score),
+                )
+            ).one()
+
+            return {
+                "total_analyses": total or 0,
+                "average_score": round(
+                    float(average or 0), 1
+                ),
+                "best_score": round(
+                    float(best or 0), 1
+                ),
+            }
+
+        except Exception as error:
+            db_logger.exception(
+                "Failed to calculate dashboard stats"
+            )
+            raise DatabaseOperationError(
+                "Failed to retrieve statistics"
+            ) from error
+
+
+def delete_analysis(analysis_id: int) -> bool:
+
+    with SessionLocal() as db:
+        try:
+            result = db.execute(
+                delete(Analysis).where(
+                    Analysis.id == analysis_id
+                )
+            )
+
+            deleted = result.rowcount > 0
+            db.commit()
+
+            return deleted
+
+        except Exception as error:
+            db.rollback()
+            db_logger.exception(
+                "Failed to delete analysis"
+            )
+            raise DatabaseOperationError(
+                "Failed to delete analysis"
+            ) from error
+
+
+def clear_history():
+
+    with SessionLocal() as db:
+        try:
+            db.execute(delete(Analysis))
+            db.commit()
+
+            db_logger.info(
+                "Dashboard history cleared"
+            )
+
+        except Exception as error:
+            db.rollback()
+            db_logger.exception(
+                "Failed to clear dashboard history"
+            )
+            raise DatabaseOperationError(
+                "Failed to clear history"
+            ) from error
