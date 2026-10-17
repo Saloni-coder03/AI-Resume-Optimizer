@@ -1,0 +1,4 @@
+We are looking for a Python Developer with 2+ years of experience.
+Skills required: Python, Django, FastAPI, REST API, PostgreSQL, Docker, AWS.
+Responsibilities: Build backend services, write clean code, work with databases.
+Education: B.Tech or equivalent.

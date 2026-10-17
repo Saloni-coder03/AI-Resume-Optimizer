@@ -1,0 +1,74 @@
+{
+  "python": {
+    "course": "Official Python Tutorial & Docs",
+    "duration": "2 weeks",
+    "link": "https://docs.python.org/3/tutorial/",
+    "free": true
+  },
+  "docker": {
+    "course": "Docker Getting Started Guide & Official Labs",
+    "duration": "1 week",
+    "link": "https://docs.docker.com/get-started/",
+    "free": true
+  },
+  "aws": {
+    "course": "AWS Cloud Practitioner Essentials (Free Digital Training)",
+    "duration": "2 weeks",
+    "link": "https://aws.amazon.com/training/digital/aws-cloud-practitioner-essentials/",
+    "free": true
+  },
+  "kubernetes": {
+    "course": "Kubernetes Official Interactive Basics Tutorial",
+    "duration": "2 weeks",
+    "link": "https://kubernetes.io/docs/tutorials/kubernetes-basics/",
+    "free": true
+  },
+  "react": {
+    "course": "React Official Interactive Tutorial & Guide",
+    "duration": "2 weeks",
+    "link": "https://react.dev/learn",
+    "free": true
+  },
+  "fastapi": {
+    "course": "FastAPI Official Interactive Tutorial",
+    "duration": "1 week",
+    "link": "https://fastapi.tiangolo.com/tutorial/",
+    "free": true
+  },
+  "machine learning": {
+    "course": "Google Machine Learning Crash Course",
+    "duration": "3 weeks",
+    "link": "https://developers.google.com/machine-learning/crash-course",
+    "free": true
+  },
+  "sql": {
+    "course": "SQL Bolt (Interactive SQL Lessons)",
+    "duration": "1 week",
+    "link": "https://sqlbolt.com/",
+    "free": true
+  },
+  "git": {
+    "course": "Pro Git Book & Official Reference",
+    "duration": "1 week",
+    "link": "https://git-scm.com/book/en/v2",
+    "free": true
+  },
+  "postgresql": {
+    "course": "PostgreSQL Official Tutorial",
+    "duration": "1 week",
+    "link": "https://www.postgresqltutorial.com/",
+    "free": true
+  },
+  "typescript": {
+    "course": "TypeScript Handbook & Official Guide",
+    "duration": "1 week",
+    "link": "https://www.typescriptlang.org/docs/handbook/intro.html",
+    "free": true
+  },
+  "linux": {
+    "course": "Linux Journey (Free Interactive Linux Training)",
+    "duration": "1 week",
+    "link": "https://linuxjourney.com/",
+    "free": true
+  }
+}
