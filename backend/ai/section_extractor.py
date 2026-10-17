@@ -129,11 +129,27 @@ class SectionExtractor:
                 except ValueError:
                     pass
         return max_y
-
+    
+    
     @staticmethod
     def has_numbers(text: str) -> bool:
-        matches = re.findall(
-            r"(\d+%|\$\s*\d+[\d,]*|\b\d+\s*(?:users|clients|million|k|x)\b)",
-            text, re.IGNORECASE
+        """Check for measurable achievements in resume text."""
+
+        import re
+
+        patterns = [
+            # Percentages: 40%, 12.5%
+            r"\b\d+(?:\.\d+)?\s*%",
+
+            # Money: $500, $2.5M
+            r"\$\s*\d[\d,]*(?:\.\d+)?\s*[kKmMbB]?",
+
+            # Metrics: 1M users, 250 clients
+            r"\b\d+(?:\.\d+)?\s*[kKmMbB]?\s*"
+            r"(?:users|clients|customers|requests|transactions)\b",
+        ]
+
+        return any(
+            re.search(pattern, text, re.IGNORECASE)
+            for pattern in patterns
         )
-        return len(matches) >= settings.ATS_MIN_NUMBERS

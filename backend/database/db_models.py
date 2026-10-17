@@ -44,3 +44,49 @@ class MatchResult(Base):
         DateTime,
         default=datetime.datetime.utcnow
     )
+    
+# --------------------------------------------------
+# DASHBOARD ANALYSIS HISTORY
+# --------------------------------------------------
+
+class Analysis(Base):
+    __tablename__ = "analyses"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    filename = Column(
+        String,
+        nullable=False,
+    )
+
+    job_label = Column(
+        String,
+        nullable=False,
+    )
+
+    match_score = Column(
+        Float,
+        nullable=False,
+    )
+
+    matched_skills = Column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+
+    missing_skills = Column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        nullable=False,
+    )
