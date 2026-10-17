@@ -2,6 +2,48 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 
+import APP_CONFIG from "../config/appConfig";
+
+const { EXCELLENT, GOOD, MODERATE } =
+  APP_CONFIG.SCORE_THRESHOLDS;
+
+function getScoreColor(score) {
+  if (score >= EXCELLENT) return "#16a34a";
+  if (score >= GOOD) return "#2563eb";
+  if (score >= MODERATE) return "#d97706";
+  return "#dc2626";
+}
+
+function getScoreBackground(score) {
+  if (score >= EXCELLENT) return "#dcfce7";
+  if (score >= GOOD) return "#dbeafe";
+  if (score >= MODERATE) return "#fef3c7";
+  return "#fee2e2";
+}
+
+function getScoreLabel(score) {
+  if (score >= EXCELLENT) return "Excellent Match";
+  if (score >= GOOD) return "Good Match";
+  if (score >= MODERATE) return "Moderate Match";
+  return "Low Match";
+}
+
+function getScoreMessage(score) {
+  if (score >= EXCELLENT) {
+    return "Excellent match! Your resume aligns strongly with this job.";
+  }
+
+  if (score >= GOOD) {
+    return "Good match. A few improvements could make your resume stronger.";
+  }
+
+  if (score >= MODERATE) {
+    return "Moderate match. Consider adding more relevant skills.";
+  }
+
+  return "Low match. Your resume needs more alignment with this job description.";
+}
+
 function ResultsPage() {
   const location = useLocation();
 
@@ -9,12 +51,18 @@ function ResultsPage() {
   const filename = location.state?.filename;
 
   // --------------------------------------------------
-  // NO ANALYSIS FOUND
+  // EMPTY STATE
   // --------------------------------------------------
 
   if (!result) {
     return (
       <div style={styles.page}>
+        <nav style={styles.navbar}>
+          <Link to={APP_CONFIG.ROUTES.HOME} style={styles.logo}>
+            {APP_CONFIG.APP_NAME}
+          </Link>
+        </nav>
+
         <div style={styles.emptyContainer}>
           <div style={styles.emptyIcon}>📄</div>
 
@@ -25,7 +73,7 @@ function ResultsPage() {
           </p>
 
           <Link
-            to="/upload"
+            to={APP_CONFIG.ROUTES.UPLOAD}
             style={styles.primaryButton}
           >
             Analyze Resume
@@ -45,61 +93,35 @@ function ResultsPage() {
     ? Math.max(0, Math.min(100, rawScore))
     : 0;
 
-  const matchedSkills = result.matched_skills || [];
-  const missingSkills = result.missing_skills || [];
+  const matchedSkills = Array.isArray(result.matched_skills)
+    ? result.matched_skills
+    : [];
 
-  const recommendations = result.recommendations || [];
-  const roadmap = result.roadmap || [];
+  const missingSkills = Array.isArray(result.missing_skills)
+    ? result.missing_skills
+    : [];
 
-  const resumeSkills = result.resume_skills || [];
-  const jobSkills = result.job_skills || [];
+  const recommendations = Array.isArray(result.recommendations)
+    ? result.recommendations
+    : [];
 
-  // --------------------------------------------------
-  // DYNAMIC SCORE COLORS
-  // --------------------------------------------------
+  const roadmap = Array.isArray(result.roadmap)
+    ? result.roadmap
+    : [];
 
-  const getScoreColor = (score) => {
-    if (score >= 80) return "#16a34a";
-    if (score >= 60) return "#2563eb";
-    if (score >= 40) return "#d97706";
-    return "#dc2626";
-  };
+  const resumeSkills = Array.isArray(result.resume_skills)
+    ? result.resume_skills
+    : [];
 
-  const getScoreBackground = (score) => {
-    if (score >= 80) return "#dcfce7";
-    if (score >= 60) return "#dbeafe";
-    if (score >= 40) return "#fef3c7";
-    return "#fee2e2";
-  };
-
-  const getScoreLabel = (score) => {
-    if (score >= 80) return "Excellent Match";
-    if (score >= 60) return "Good Match";
-    if (score >= 40) return "Moderate Match";
-    return "Low Match";
-  };
-
-  const getScoreMessage = (score) => {
-    if (score >= 80) {
-      return "Excellent match! Your resume aligns strongly with this job.";
-    }
-
-    if (score >= 60) {
-      return "Good match. A few improvements could make your resume stronger.";
-    }
-
-    if (score >= 40) {
-      return "Moderate match. Consider adding more relevant skills.";
-    }
-
-    return "Low match. Your resume needs more alignment with this job description.";
-  };
+  const jobSkills = Array.isArray(result.job_skills)
+    ? result.job_skills
+    : [];
 
   const scoreColor = getScoreColor(matchScore);
   const scoreBackground = getScoreBackground(matchScore);
 
   // --------------------------------------------------
-  // CIRCULAR PROGRESS CALCULATION
+  // CIRCULAR PROGRESS
   // --------------------------------------------------
 
   const radius = 76;
@@ -110,25 +132,33 @@ function ResultsPage() {
 
   return (
     <div style={styles.page}>
-
       {/* NAVBAR */}
 
       <nav style={styles.navbar}>
-        <Link to="/" style={styles.logo}>
-          AI Resume Optimizer
+        <Link
+          to={APP_CONFIG.ROUTES.HOME}
+          style={styles.logo}
+        >
+          {APP_CONFIG.APP_NAME}
         </Link>
 
         <div style={styles.navLinks}>
-          <Link to="/" style={styles.navLink}>
+          <Link
+            to={APP_CONFIG.ROUTES.HOME}
+            style={styles.navLink}
+          >
             Home
           </Link>
 
-          <Link to="/dashboard" style={styles.navLink}>
+          <Link
+            to={APP_CONFIG.ROUTES.DASHBOARD}
+            style={styles.navLink}
+          >
             Dashboard
           </Link>
 
           <Link
-            to="/upload"
+            to={APP_CONFIG.ROUTES.UPLOAD}
             style={styles.newAnalysisButton}
           >
             New Analysis
@@ -137,7 +167,6 @@ function ResultsPage() {
       </nav>
 
       <main style={styles.container}>
-
         {/* HEADER */}
 
         <div style={styles.header}>
@@ -156,12 +185,9 @@ function ResultsPage() {
           )}
         </div>
 
-        {/* ----------------------------------------
-            DYNAMIC MATCH SCORE
-        ---------------------------------------- */}
+        {/* MATCH SCORE */}
 
         <section style={styles.scoreCard}>
-
           <p style={styles.scoreLabel}>
             Job Match Score
           </p>
@@ -181,8 +207,6 @@ function ResultsPage() {
               style={styles.progressSvg}
               aria-hidden="true"
             >
-              {/* Background ring */}
-
               <circle
                 cx="100"
                 cy="100"
@@ -191,8 +215,6 @@ function ResultsPage() {
                 stroke="#e2e8f0"
                 strokeWidth="15"
               />
-
-              {/* Dynamic progress ring */}
 
               <circle
                 cx="100"
@@ -212,8 +234,6 @@ function ResultsPage() {
               />
             </svg>
 
-            {/* Center percentage */}
-
             <div style={styles.scoreCenter}>
               <span
                 style={{
@@ -225,8 +245,6 @@ function ResultsPage() {
               </span>
             </div>
           </div>
-
-          {/* Match quality badge */}
 
           <div
             style={{
@@ -248,21 +266,17 @@ function ResultsPage() {
           </p>
         </section>
 
-        {/* ----------------------------------------
-            MATCHED AND MISSING SKILLS
-        ---------------------------------------- */}
+        {/* MATCHED / MISSING SKILLS */}
 
         <div style={styles.twoColumnGrid}>
-
-          {/* Matched Skills */}
-
           <section style={styles.card}>
             <h2 style={styles.matchedTitle}>
               ✓ Matched Skills
             </h2>
 
             <p style={styles.muted}>
-              Skills found in both your resume and the job description.
+              Skills found in both your resume and the
+              job description.
             </p>
 
             {matchedSkills.length > 0 ? (
@@ -282,8 +296,6 @@ function ResultsPage() {
               </p>
             )}
           </section>
-
-          {/* Missing Skills */}
 
           <section style={styles.card}>
             <h2 style={styles.missingTitle}>
@@ -308,15 +320,13 @@ function ResultsPage() {
               </div>
             ) : (
               <p style={styles.noData}>
-                Great! No missing skills were detected.
+                No missing skills were detected.
               </p>
             )}
           </section>
         </div>
 
-        {/* ----------------------------------------
-            RECOMMENDATIONS
-        ---------------------------------------- */}
+        {/* RECOMMENDATIONS */}
 
         <section style={styles.card}>
           <h2 style={styles.cardHeading}>
@@ -329,22 +339,27 @@ function ResultsPage() {
 
           {recommendations.length > 0 ? (
             <div style={styles.listContainer}>
-              {recommendations.map(
-                (recommendation, index) => (
-                  <div
-                    key={index}
-                    style={styles.recommendationItem}
-                  >
-                    <div style={styles.numberCircle}>
-                      {index + 1}
-                    </div>
-
-                    <div style={styles.itemText}>
-                      {recommendation}
-                    </div>
+              {recommendations.map((item, index) => (
+                <div
+                  key={index}
+                  style={styles.recommendationItem}
+                >
+                  <div style={styles.numberCircle}>
+                    {index + 1}
                   </div>
-                )
-              )}
+
+                  <div style={styles.itemText}>
+                    {typeof item === "string"
+                      ? item
+                      : item.description ||
+                        item.message ||
+                        item.text ||
+                        item.recommendation ||
+                        item.title ||
+                        JSON.stringify(item)}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <p style={styles.noData}>
@@ -353,9 +368,7 @@ function ResultsPage() {
           )}
         </section>
 
-        {/* ----------------------------------------
-            LEARNING ROADMAP
-        ---------------------------------------- */}
+        {/* LEARNING ROADMAP */}
 
         <section style={styles.card}>
           <h2 style={styles.cardHeading}>
@@ -363,7 +376,7 @@ function ResultsPage() {
           </h2>
 
           <p style={styles.muted}>
-            Suggested learning steps based on your missing skills.
+            Suggested learning steps based on missing skills.
           </p>
 
           {roadmap.length > 0 ? (
@@ -379,11 +392,21 @@ function ResultsPage() {
 
                   <div style={styles.roadmapContent}>
                     <strong>
-                      Step {index + 1}
+                      {typeof step === "object" &&
+                      step !== null &&
+                      step.title
+                        ? step.title
+                        : `Step ${index + 1}`}
                     </strong>
 
                     <p style={styles.roadmapText}>
-                      {step}
+                      {typeof step === "string"
+                        ? step
+                        : step.description ||
+                          step.message ||
+                          step.text ||
+                          step.action ||
+                          JSON.stringify(step)}
                     </p>
                   </div>
                 </div>
@@ -396,14 +419,9 @@ function ResultsPage() {
           )}
         </section>
 
-        {/* ----------------------------------------
-            ALL DETECTED SKILLS
-        ---------------------------------------- */}
+        {/* DETECTED SKILLS */}
 
         <div style={styles.twoColumnGrid}>
-
-          {/* Resume Skills */}
-
           <section style={styles.card}>
             <h2 style={styles.cardHeading}>
               📄 Resume Skills
@@ -430,8 +448,6 @@ function ResultsPage() {
               </p>
             )}
           </section>
-
-          {/* Job Skills */}
 
           <section style={styles.card}>
             <h2 style={styles.cardHeading}>
@@ -461,27 +477,25 @@ function ResultsPage() {
           </section>
         </div>
 
-        {/* ----------------------------------------
-            ACTION BUTTONS
-        ---------------------------------------- */}
+        {/* ACTIONS */}
 
         <div style={styles.actions}>
           <Link
-            to="/upload"
+            to={APP_CONFIG.ROUTES.UPLOAD}
             style={styles.primaryButton}
           >
             Analyze Another Resume
           </Link>
 
           <Link
-            to="/dashboard"
+            to={APP_CONFIG.ROUTES.DASHBOARD}
             style={styles.secondaryButton}
           >
             View Dashboard
           </Link>
 
           <Link
-            to="/"
+            to={APP_CONFIG.ROUTES.HOME}
             style={styles.secondaryButton}
           >
             Back to Home
@@ -491,10 +505,6 @@ function ResultsPage() {
     </div>
   );
 }
-
-// --------------------------------------------------
-// STYLES
-// --------------------------------------------------
 
 const styles = {
   page: {
@@ -512,7 +522,7 @@ const styles = {
     alignItems: "center",
     flexWrap: "wrap",
     gap: "16px",
-    backgroundColor: "white",
+    backgroundColor: "#ffffff",
     borderBottom: "1px solid #e2e8f0",
   },
 
@@ -538,7 +548,7 @@ const styles = {
 
   newAnalysisButton: {
     backgroundColor: "#2563eb",
-    color: "white",
+    color: "#ffffff",
     textDecoration: "none",
     padding: "10px 18px",
     borderRadius: "8px",
@@ -574,15 +584,11 @@ const styles = {
 
   muted: {
     color: "#64748b",
-    lineHeight: "1.6",
+    lineHeight: 1.6,
   },
 
-  // --------------------------------------------------
-  // SCORE CARD
-  // --------------------------------------------------
-
   scoreCard: {
-    backgroundColor: "white",
+    backgroundColor: "#ffffff",
     borderRadius: "18px",
     padding: "clamp(20px, 4vw, 40px)",
     textAlign: "center",
@@ -614,13 +620,10 @@ const styles = {
 
   scoreCenter: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    inset: 0,
     display: "flex",
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "center",
     pointerEvents: "none",
   },
 
@@ -641,7 +644,7 @@ const styles = {
   scoreMessage: {
     color: "#475569",
     fontSize: "16px",
-    lineHeight: "1.6",
+    lineHeight: 1.6,
     margin: "5px 0 0",
   },
 
@@ -650,10 +653,6 @@ const styles = {
     fontSize: "12px",
     marginTop: "18px",
   },
-
-  // --------------------------------------------------
-  // RESULT CARDS
-  // --------------------------------------------------
 
   twoColumnGrid: {
     display: "grid",
@@ -664,7 +663,7 @@ const styles = {
   },
 
   card: {
-    backgroundColor: "white",
+    backgroundColor: "#ffffff",
     padding: "clamp(20px, 4vw, 30px)",
     borderRadius: "16px",
     boxShadow: "0 4px 18px rgba(0,0,0,0.06)",
@@ -688,8 +687,8 @@ const styles = {
 
   skillContainer: {
     display: "flex",
-    gap: "10px",
     flexWrap: "wrap",
+    gap: "10px",
     marginTop: "20px",
   },
 
@@ -727,22 +726,18 @@ const styles = {
     fontStyle: "italic",
   },
 
-  // --------------------------------------------------
-  // RECOMMENDATIONS
-  // --------------------------------------------------
-
   listContainer: {
     marginTop: "20px",
   },
 
   recommendationItem: {
     display: "flex",
-    gap: "15px",
     alignItems: "flex-start",
-    backgroundColor: "#f8fafc",
+    gap: "15px",
     padding: "16px",
-    borderRadius: "10px",
     marginBottom: "12px",
+    borderRadius: "10px",
+    backgroundColor: "#f8fafc",
   },
 
   numberCircle: {
@@ -758,14 +753,10 @@ const styles = {
   },
 
   itemText: {
-    lineHeight: "1.6",
+    lineHeight: 1.6,
     paddingTop: "5px",
     overflowWrap: "anywhere",
   },
-
-  // --------------------------------------------------
-  // ROADMAP
-  // --------------------------------------------------
 
   roadmapContainer: {
     marginTop: "25px",
@@ -783,7 +774,7 @@ const styles = {
     height: "42px",
     borderRadius: "50%",
     backgroundColor: "#2563eb",
-    color: "white",
+    color: "#ffffff",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
@@ -798,25 +789,22 @@ const styles = {
   roadmapText: {
     margin: "6px 0 0",
     color: "#64748b",
-    lineHeight: "1.6",
+    lineHeight: 1.6,
     overflowWrap: "anywhere",
   },
-
-  // --------------------------------------------------
-  // ACTION BUTTONS
-  // --------------------------------------------------
 
   actions: {
     display: "flex",
     justifyContent: "center",
-    gap: "15px",
     flexWrap: "wrap",
+    gap: "15px",
     marginTop: "20px",
   },
 
   primaryButton: {
+    display: "inline-block",
     backgroundColor: "#2563eb",
-    color: "white",
+    color: "#ffffff",
     padding: "14px 24px",
     borderRadius: "9px",
     textDecoration: "none",
@@ -825,7 +813,8 @@ const styles = {
   },
 
   secondaryButton: {
-    backgroundColor: "white",
+    display: "inline-block",
+    backgroundColor: "#ffffff",
     color: "#2563eb",
     padding: "14px 24px",
     borderRadius: "9px",
@@ -834,10 +823,6 @@ const styles = {
     fontWeight: "bold",
     textAlign: "center",
   },
-
-  // --------------------------------------------------
-  // EMPTY STATE
-  // --------------------------------------------------
 
   emptyContainer: {
     maxWidth: "500px",

@@ -2,10 +2,15 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import APP_CONFIG from "../config/appConfig";
 import { analyzeResume } from "../api/apiService";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-const ALLOWED_EXTENSIONS = ["pdf", "docx"];
+const MAX_FILE_SIZE = APP_CONFIG.MAX_FILE_SIZE_BYTES;
+
+const ALLOWED_EXTENSIONS =
+  APP_CONFIG.ALLOWED_FILE_EXTENSIONS.map((extension) =>
+    extension.replace(/^\./, "").toLowerCase()
+  );
 
 function UploadPage() {
   const [resume, setResume] = useState(null);
@@ -17,7 +22,7 @@ function UploadPage() {
   const navigate = useNavigate();
 
   // --------------------------------------------------
-  // FILE VALIDATION
+  // VALIDATE AND STORE FILE
   // --------------------------------------------------
 
   const validateAndSetFile = (file) => {
@@ -41,7 +46,9 @@ function UploadPage() {
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      setError("Resume must be 5 MB or smaller.");
+      setError(
+        `Resume must be ${APP_CONFIG.MAX_FILE_SIZE_MB} MB or smaller.`
+      );
       setResume(null);
       return;
     }
@@ -51,7 +58,7 @@ function UploadPage() {
   };
 
   // --------------------------------------------------
-  // HANDLE FILE SELECTION
+  // FILE SELECTION
   // --------------------------------------------------
 
   const handleFileChange = (event) => {
@@ -59,7 +66,7 @@ function UploadPage() {
 
     validateAndSetFile(file);
 
-    // Allow the same file to be selected again.
+    // Allow selecting the same file again.
     event.target.value = "";
   };
 
@@ -88,7 +95,6 @@ function UploadPage() {
   const handleDrop = (event) => {
     event.preventDefault();
     event.stopPropagation();
-
     setIsDragging(false);
 
     if (loading) return;
@@ -109,7 +115,7 @@ function UploadPage() {
   };
 
   // --------------------------------------------------
-  // ANALYZE RESUME
+  // SUBMIT ANALYSIS
   // --------------------------------------------------
 
   const handleSubmit = async (event) => {
@@ -127,9 +133,10 @@ function UploadPage() {
       return;
     }
 
-    // Final check before sending to backend.
     if (resume.size > MAX_FILE_SIZE) {
-      setError("Resume must be 5 MB or smaller.");
+      setError(
+        `Resume must be ${APP_CONFIG.MAX_FILE_SIZE_MB} MB or smaller.`
+      );
       return;
     }
 
@@ -137,36 +144,30 @@ function UploadPage() {
       setLoading(true);
       setError("");
 
-      // Send resume and job description to FastAPI.
       const result = await analyzeResume(
         resume,
-        jobDescription
+        jobDescription.trim()
       );
 
-      // Navigate to results with analysis data.
-      navigate("/results", {
+      navigate(APP_CONFIG.ROUTES.RESULTS, {
         state: {
-          result: result,
+          result,
           filename: resume.name,
         },
       });
     } catch (err) {
       console.error("Analysis error:", err);
 
+      const detail = err.response?.data?.detail;
+
       let message =
         "Something went wrong while analyzing your resume.";
 
-      const detail = err.response?.data?.detail;
-
       if (typeof detail === "string") {
         message = detail;
-      }
-
-      if (Array.isArray(detail)) {
+      } else if (Array.isArray(detail)) {
         message = detail[0]?.msg || message;
-      }
-
-      if (!err.response) {
+      } else if (!err.response) {
         message =
           "Unable to connect to the backend. Make sure FastAPI is running.";
       }
@@ -183,21 +184,32 @@ function UploadPage() {
 
   return (
     <div style={styles.page}>
-      {/* Navbar */}
-
       <nav style={styles.navbar}>
-        <Link to="/" style={styles.logo}>
-          AI Resume Optimizer
+        <Link
+          to={APP_CONFIG.ROUTES.HOME}
+          style={styles.logo}
+        >
+          {APP_CONFIG.APP_NAME}
         </Link>
 
-        <Link to="/" style={styles.homeLink}>
-          Home
-        </Link>
+        <div style={styles.navLinks}>
+          <Link
+            to={APP_CONFIG.ROUTES.HOME}
+            style={styles.navLink}
+          >
+            Home
+          </Link>
+
+          <Link
+            to={APP_CONFIG.ROUTES.DASHBOARD}
+            style={styles.navLink}
+          >
+            Dashboard
+          </Link>
+        </div>
       </nav>
 
       <main style={styles.container}>
-        {/* Header */}
-
         <div style={styles.header}>
           <div style={styles.badge}>
             AI-Powered Resume Analysis
@@ -214,7 +226,7 @@ function UploadPage() {
         </div>
 
         <form onSubmit={handleSubmit} style={styles.form}>
-          {/* Resume Upload */}
+          {/* UPLOAD SECTION */}
 
           <section style={styles.card}>
             <div style={styles.sectionHeader}>
@@ -226,13 +238,10 @@ function UploadPage() {
                 </h2>
 
                 <p style={styles.sectionText}>
-                  Select or drag and drop a PDF or DOCX resume
-                  from your computer.
+                  Select or drag and drop a PDF or DOCX resume.
                 </p>
               </div>
             </div>
-
-            {/* Drag-and-drop upload area */}
 
             <div
               style={{
@@ -262,7 +271,7 @@ function UploadPage() {
 
                 <input
                   type="file"
-                  accept=".pdf,.docx"
+                  accept={APP_CONFIG.ALLOWED_FILE_EXTENSIONS.join(",")}
                   onChange={handleFileChange}
                   disabled={loading}
                   style={styles.hiddenInput}
@@ -270,21 +279,14 @@ function UploadPage() {
               </label>
 
               <p style={styles.helperText}>
-                Supported formats: PDF and DOCX
-              </p>
-
-              <p style={styles.helperText}>
-                Maximum file size: 5 MB
+                PDF and DOCX only • Maximum{" "}
+                {APP_CONFIG.MAX_FILE_SIZE_MB} MB
               </p>
             </div>
 
-            {/* Selected File */}
-
             {resume && (
               <div style={styles.selectedFile}>
-                <div style={styles.successIcon}>
-                  ✓
-                </div>
+                <div style={styles.successIcon}>✓</div>
 
                 <div style={styles.selectedFileDetails}>
                   <div style={styles.fileName}>
@@ -312,7 +314,7 @@ function UploadPage() {
             )}
           </section>
 
-          {/* Job Description */}
+          {/* JOB DESCRIPTION SECTION */}
 
           <section style={styles.card}>
             <div style={styles.sectionHeader}>
@@ -335,17 +337,7 @@ function UploadPage() {
               onChange={(event) =>
                 setJobDescription(event.target.value)
               }
-              placeholder={`Paste the job description here...
-
-Example:
-
-We are looking for a Software Developer with experience in Python, React, SQL, Docker and AWS.
-
-Responsibilities:
-- Develop web applications
-- Build REST APIs
-- Work with cloud technologies
-- Collaborate with engineering teams`}
+              placeholder="Paste the job description here..."
               disabled={loading}
               style={styles.textarea}
             />
@@ -355,16 +347,12 @@ Responsibilities:
             </div>
           </section>
 
-          {/* Error Message */}
-
           {error && (
             <div style={styles.errorBox} role="alert">
               <span>⚠️</span>
               <span>{error}</span>
             </div>
           )}
-
-          {/* Analyze Button */}
 
           <button
             type="submit"
@@ -379,16 +367,12 @@ Responsibilities:
               : "Analyze Resume →"}
           </button>
 
-          {/* Loading Message */}
-
           {loading && (
             <div style={styles.loadingBox}>
-              <div style={styles.loader}>⏳</div>
+              <span style={styles.loader}>⏳</span>
 
               <div>
-                <strong>
-                  Analyzing your resume...
-                </strong>
+                <strong>Analyzing your resume...</strong>
 
                 <p style={styles.loadingText}>
                   Extracting skills and comparing them with
@@ -417,13 +401,13 @@ const styles = {
 
   navbar: {
     minHeight: "70px",
-    padding: "12px 8%",
+    padding: "12px 5%",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: "16px",
     flexWrap: "wrap",
-    backgroundColor: "white",
+    gap: "16px",
+    backgroundColor: "#ffffff",
     borderBottom: "1px solid #e2e8f0",
   },
 
@@ -434,7 +418,14 @@ const styles = {
     textDecoration: "none",
   },
 
-  homeLink: {
+  navLinks: {
+    display: "flex",
+    alignItems: "center",
+    gap: "18px",
+    flexWrap: "wrap",
+  },
+
+  navLink: {
     color: "#475569",
     textDecoration: "none",
     fontWeight: "bold",
@@ -470,7 +461,7 @@ const styles = {
   subtitle: {
     color: "#64748b",
     fontSize: "17px",
-    lineHeight: "1.6",
+    lineHeight: 1.6,
     maxWidth: "650px",
     margin: "0 auto",
   },
@@ -482,7 +473,7 @@ const styles = {
   },
 
   card: {
-    backgroundColor: "white",
+    backgroundColor: "#ffffff",
     padding: "clamp(18px, 4vw, 30px)",
     borderRadius: "16px",
     boxShadow: "0 4px 18px rgba(0,0,0,0.06)",
@@ -500,7 +491,7 @@ const styles = {
     height: "38px",
     borderRadius: "50%",
     backgroundColor: "#2563eb",
-    color: "white",
+    color: "#ffffff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -516,11 +507,10 @@ const styles = {
     margin: "6px 0 0",
     color: "#64748b",
     fontSize: "14px",
-    lineHeight: "1.5",
+    lineHeight: 1.5,
   },
 
   uploadBox: {
-    display: "block",
     textAlign: "center",
     border: "2px dashed #93c5fd",
     backgroundColor: "#f8fbff",
@@ -560,7 +550,7 @@ const styles = {
   browseButton: {
     display: "inline-block",
     backgroundColor: "#2563eb",
-    color: "white",
+    color: "#ffffff",
     padding: "11px 22px",
     borderRadius: "8px",
     fontWeight: "bold",
@@ -570,7 +560,7 @@ const styles = {
   helperText: {
     color: "#94a3b8",
     fontSize: "12px",
-    marginTop: "12px",
+    marginTop: "16px",
   },
 
   selectedFile: {
@@ -590,7 +580,7 @@ const styles = {
     height: "35px",
     borderRadius: "50%",
     backgroundColor: "#22c55e",
-    color: "white",
+    color: "#ffffff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -615,7 +605,7 @@ const styles = {
   },
 
   removeButton: {
-    backgroundColor: "white",
+    backgroundColor: "#ffffff",
     border: "1px solid #fecaca",
     color: "#dc2626",
     borderRadius: "8px",
@@ -633,7 +623,7 @@ const styles = {
     resize: "vertical",
     fontFamily: "Arial, sans-serif",
     fontSize: "15px",
-    lineHeight: "1.6",
+    lineHeight: 1.6,
     outlineColor: "#2563eb",
   },
 
@@ -646,8 +636,8 @@ const styles = {
 
   errorBox: {
     display: "flex",
-    gap: "10px",
     alignItems: "center",
+    gap: "10px",
     backgroundColor: "#fee2e2",
     color: "#b91c1c",
     padding: "14px",
@@ -658,7 +648,7 @@ const styles = {
     width: "100%",
     border: "none",
     backgroundColor: "#2563eb",
-    color: "white",
+    color: "#ffffff",
     padding: "17px",
     borderRadius: "10px",
     fontSize: "17px",
@@ -672,13 +662,13 @@ const styles = {
   },
 
   loadingBox: {
+    display: "flex",
+    gap: "15px",
+    alignItems: "center",
     backgroundColor: "#eff6ff",
     border: "1px solid #bfdbfe",
     padding: "18px",
     borderRadius: "10px",
-    display: "flex",
-    gap: "15px",
-    alignItems: "center",
   },
 
   loader: {
