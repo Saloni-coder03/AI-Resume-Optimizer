@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import shutil
 import uuid
@@ -19,6 +20,9 @@ from ai.recommendations import (
     generate_learning_roadmap,
 )
 
+from database.db_queries import save_analysis
+from core.logger import api_logger
+
 
 router = APIRouter(
     prefix="/api",
@@ -26,14 +30,21 @@ router = APIRouter(
 )
 
 
-# Folder used temporarily while processing resumes
-UPLOAD_DIRECTORY = Path("uploads")
+# --------------------------------------------------
+# TEMPORARY UPLOAD DIRECTORY
+# --------------------------------------------------
+
+UPLOAD_DIRECTORY = Path(__file__).resolve().parents[2] / "uploads"
 
 UPLOAD_DIRECTORY.mkdir(
     parents=True,
     exist_ok=True,
 )
 
+
+# --------------------------------------------------
+# MATCH RESUME WITH JOB DESCRIPTION
+# --------------------------------------------------
 
 @router.post(
     "/match",
@@ -44,17 +55,17 @@ async def match_resume(
     job_description: str = Form(...),
 ):
 
-    # Check resume file
+    # --------------------------------------------------
+    # VALIDATE FILE
+    # --------------------------------------------------
+
     if not file.filename:
         raise HTTPException(
             status_code=400,
             detail="Please upload a resume.",
         )
 
-    # Check file type
-    extension = Path(
-        file.filename
-    ).suffix.lower()
+    extension = Path(file.filename).suffix.lower()
 
     allowed_extensions = [
         ".pdf",
@@ -64,42 +75,45 @@ async def match_resume(
     if extension not in allowed_extensions:
         raise HTTPException(
             status_code=400,
-            detail="Only PDF and DOCX files are supported.",
+            detail=(
+                "Only PDF and DOCX files "
+                "are supported."
+            ),
         )
 
-    # Check job description
+    # --------------------------------------------------
+    # VALIDATE JOB DESCRIPTION
+    # --------------------------------------------------
+
     if not job_description.strip():
         raise HTTPException(
             status_code=400,
             detail="Job description cannot be empty.",
         )
 
-    # Generate a unique temporary filename
-    temporary_filename = (
-        f"{uuid.uuid4()}{extension}"
-    )
+    # --------------------------------------------------
+    # CREATE TEMPORARY FILE
+    # --------------------------------------------------
 
-    file_path = (
-        UPLOAD_DIRECTORY
-        / temporary_filename
-    )
+    temporary_filename = f"{uuid.uuid4()}{extension}"
+
+    file_path = UPLOAD_DIRECTORY / temporary_filename
 
     try:
 
-        # Save uploaded resume temporarily
-        with open(
-            file_path,
-            "wb",
-        ) as buffer:
+        # --------------------------------------------------
+        # STEP 1: SAVE RESUME TEMPORARILY
+        # --------------------------------------------------
 
+        with open(file_path, "wb") as buffer:
             shutil.copyfileobj(
                 file.file,
                 buffer,
             )
 
-        # -----------------------------------
-        # STEP 1: Extract resume text
-        # -----------------------------------
+        # --------------------------------------------------
+        # STEP 2: EXTRACT RESUME TEXT
+        # --------------------------------------------------
 
         resume_text = extract_resume_text(
             str(file_path)
@@ -109,84 +123,97 @@ async def match_resume(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "No readable text was found in the resume. "
-                    "Please try another PDF or DOCX file."
+                    "No readable text was found "
+                    "in the resume. Please try "
+                    "another PDF or DOCX file."
                 ),
             )
 
-        # -----------------------------------
-        # STEP 2: Compare resume with job
-        # -----------------------------------
+        # --------------------------------------------------
+        # STEP 3: COMPARE RESUME WITH JOB
+        # --------------------------------------------------
 
         match_result = compare_resume_to_job(
             resume_text,
             job_description,
         )
 
-        matched_skills = (
-            match_result["matched_skills"]
+        matched_skills = match_result["matched_skills"]
+        missing_skills = match_result["missing_skills"]
+
+        # --------------------------------------------------
+        # STEP 4: GENERATE RECOMMENDATIONS
+        # --------------------------------------------------
+
+        recommendations = generate_recommendations(
+            matched_skills,
+            missing_skills,
         )
 
-        missing_skills = (
-            match_result["missing_skills"]
+        # --------------------------------------------------
+        # STEP 5: GENERATE LEARNING ROADMAP
+        # --------------------------------------------------
+
+        roadmap = generate_learning_roadmap(
+            missing_skills
         )
 
-        # -----------------------------------
-        # STEP 3: Generate recommendations
-        # -----------------------------------
+        # --------------------------------------------------
+        # STEP 6: CREATE JOB LABEL FOR HISTORY
+        # --------------------------------------------------
 
-        recommendations = (
-            generate_recommendations(
-                matched_skills,
-                missing_skills,
-            )
+        job_label = next(
+            (
+                line.strip()
+                for line in job_description.splitlines()
+                if line.strip()
+            ),
+            "Job Description",
         )
 
-        # -----------------------------------
-        # STEP 4: Generate learning roadmap
-        # -----------------------------------
+        # Keep dashboard label short
+        job_label = job_label[:120]
 
-        roadmap = (
-            generate_learning_roadmap(
-                missing_skills
-            )
+        # --------------------------------------------------
+        # STEP 7: SAVE ANALYSIS TO DATABASE
+        # --------------------------------------------------
+
+        save_analysis(
+            filename=file.filename,
+            job_label=job_label,
+            match_score=match_result["score"],
+            matched_skills=matched_skills,
+            missing_skills=missing_skills,
         )
 
-        # -----------------------------------
-        # STEP 5: Send result to React
-        # -----------------------------------
+        # --------------------------------------------------
+        # STEP 8: RETURN RESULTS TO REACT
+        # --------------------------------------------------
 
         return MatchResponse(
-
-            match_score=match_result[
-                "score"
-            ],
-
+            match_score=match_result["score"],
             matched_skills=matched_skills,
-
             missing_skills=missing_skills,
-
             recommendations=recommendations,
-
             roadmap=roadmap,
-
-            resume_skills=match_result[
-                "resume_skills"
-            ],
-
-            job_skills=match_result[
-                "job_skills"
-            ],
+            resume_skills=match_result["resume_skills"],
+            job_skills=match_result["job_skills"],
         )
+
+    # --------------------------------------------------
+    # HANDLE VALIDATION ERRORS
+    # --------------------------------------------------
 
     except HTTPException:
         raise
 
-    except Exception as error:
+    # --------------------------------------------------
+    # HANDLE UNEXPECTED ERRORS WITH CENTRAL LOGGING
+    # --------------------------------------------------
 
-        print(
-            "Resume analysis error:",
-            error,
+    except Exception:
+        api_logger.exception(
+            "Resume analysis failed"
         )
 
         raise HTTPException(
@@ -195,12 +222,19 @@ async def match_resume(
                 "Unable to analyze the resume. "
                 "Please try again."
             ),
-        )
+        ) from None
+
+    # --------------------------------------------------
+    # ALWAYS DELETE TEMPORARY RESUME
+    # --------------------------------------------------
 
     finally:
-
-        # Delete temporary resume
-        if file_path.exists():
-            file_path.unlink()
+        try:
+            if file_path.exists():
+                file_path.unlink()
+        except OSError:
+            api_logger.exception(
+                "Failed to delete temporary resume file"
+            )
 
         await file.close()
